@@ -1,0 +1,19 @@
+{
+  "properties": [
+    {
+      "name": "jwt.secret",
+      "type": "java.lang.String",
+      "description": "HS256 JWT 검증에 사용하는 공유 비밀키."
+    },
+    {
+      "name": "calendar.default-visible-tag-ids",
+      "type": "java.lang.String",
+      "description": "쉼표 구분 태그 ID. 캘린더 기본 노출 태그(임시·정식 회원)."
+    },
+    {
+      "name": "service.user-profile.base-url",
+      "type": "java.lang.String",
+      "description": "profile-svc 베이스 URL (닉네임 조회 등)."
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+### Gradle ###
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+
+# 빌드 산출물 (wrapper 제외)
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+### Local Gradle home (CI/sandbox override) ###
+.gradle-user-home/
+
+### JVM crash / heap ###
+hs_err_pid*.log
+replay_pid*.log
+*.hprof
+.attach_pid*
+
+### Logs & temp ###
+*.log
+*.tmp
+*.temp
+*.swp
+*~
+*.orig
+
+### OS ###
+.DS_Store
+Thumbs.db
+
+### Local / secrets / machine-only (do not commit) ###
+# 로컬 개발·배포 스크립트 (k3s-reload, setup-calendar-dev 등 — DB 시드는 oinkvalley-db/ 사용)
+*.sh
+
+.env
+.env.*
+!.env.example
+.env.local
+
+# Spring: 로컬 프로필·URL·비번 오버라이드
+application-local.properties
+application-local.yml
+application-local.yaml
+**/application-local.*
+**/application-*-local.*
+**/application-dev.properties
+**/application-dev.yml
+**/application-dev.yaml
+**/application-postgres.properties
+application-secrets.properties
+**/application-secrets.*
+secrets.properties
+
+# 키·인증서
+*.p12
+*.jks
+*.pem
+*.key
+
+# REST Client (VS Code / IntelliJ) 비공개 env
+http-client.private.env.json
+**/http-client.private.env.json
+
+### Eclipse / STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+.run/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/

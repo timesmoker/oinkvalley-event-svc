@@ -1,0 +1,231 @@
+# 일정·태그 공개 범위(visibility) 규칙
+
+도메인 SOT: 저장소 루트 `schedule_domain_design_document(1).md`  
+구현 SOT: **event-svc** (`Tag`, `Event`, `EventAccessService`) + **frontend 캘린더** (`features/calendar`)
+
+---
+
+## 1. 태그 공개 여부 변경 (소유자)
+
+캘린더 설정(내 태그)에서 **공개 / 비공개** 토글 → `PUT /tags/{tagId}/visibility` → `TagService.updateVisibility`.
+
+| 조건 | 결과 |
+|------|------|
+| 태그 소유자 + `USER` 타입 | 변경 가능 (`PRIVATE` ↔ `SHARED`, UI 「공개」는 `PUBLIC` 요청 → 서버 `SHARED`) |
+| 타인 태그 / `followed` | 토글 비활성, 「공개 여부는 태그 소유자만…」 |
+| `ETC` 태그 | **403** — 변경 불가 |
+| API 실패 | 「태그 공개 여부를 변경할 수 없습니다.」 |
+
+---
+
+## 2. DB·도메인 `visibility` 값
+
+`tags.visibility`, `events.visibility` 컬럼 — `VARCHAR(16)`, CHECK 제약.
+
+| 값 | 의미 (요약) |
+|----|-------------|
+| `PRIVATE` | 소유자(및 이벤트는 참여자) 중심의 비공개 |
+| `SHARED` | 지정 공유 대상(`tag_members` / 태그 접근) |
+| `PUBLIC` | 누구나(비로그인 포함) 태그·이벤트 자체 접근 가능 |
+
+태그와 이벤트의 `visibility`는 **독립**이다. 태그만 `PUBLIC`이어도 이벤트는 `PRIVATE`일 수 있다.
+
+---
+
+## 3. 태그(`tags`) 규칙
+
+### 3.1 타입
+
+| `type` | 설명 |
+|--------|------|
+| `USER` | 사용자가 만든 일반 태그 |
+| `ETC` | 소유자당 하나, 미분류 일정용 시스템 태그 (`기타`) |
+
+### 3.2 `ETC` 태그 (변경 불가)
+
+| 항목 | 정책 |
+|------|------|
+| visibility | **`PRIVATE` 고정** |
+| 공개·공유 전환 | **불가** |
+| 삭제·이름 변경 | **불가** (서버·UI에서 USER 태그만 대상) |
+| 생성 | 일정에 태그 없으면 서버가 소유자 `ETC` 자동 연결 |
+
+### 3.3 `USER` 태그 — 생성 (`POST /tags`)
+
+| FE 요청 | 서버 저장 |
+|---------|-----------|
+| `visibility: "PRIVATE"` (또는 생략) | `PRIVATE` |
+| `visibility: "public"` → body `PUBLIC` | 서버가 **`SHARED`로 저장** (`PUBLIC` 요청은 SHARED로 정규화) |
+| `visibility: "private"` | `PRIVATE` |
+
+**의도:** UI의 「공개」는 DB의 `SHARED` 또는 `PUBLIC`에 가깝고, 생성 시 `PUBLIC` 문자열을내도 **실제로는 `SHARED`** 가 된다.
+
+### 3.4 `USER` 태그 — 수정
+
+| 동작 | event-svc | FE 캘린더 |
+|------|-----------|-----------|
+| 이름 변경 | API 없음 | 없음 |
+| **visibility 변경** | `PUT /tags/{tagId}/visibility` — 소유자만 | `updateCalendarTagVisibility` |
+| **삭제** | `DELETE /tags/{tagId}` — 소유자·`USER`만 (`ETC` 불가). 연결 일정에서 태그 제거 후 태그 0개면 **일정 소유자 `ETC`** 연결 | 소유 `USER`: API 삭제. `followed`: 내 목록에서 제거(숨김) |
+| `tag_members` 추가 | API 없음 | 없음 |
+
+### 3.5 태그 접근 (`EventAccessService.canAccessTag`)
+
+로그인 사용자가 태그를 **볼 수 있는지** (목록·숨김·일정 필터 등).
+
+| 조건 | 접근 |
+|------|------|
+| `CALENDAR_DEFAULT_VISIBLE_TAG_IDS`에 포함 | O |
+| `owner_id` = 본인 | O |
+| `visibility = PUBLIC` | O |
+| `visibility = SHARED` 이고 `tag_members`에 본인 | O |
+| 그 외 `PRIVATE` | 소유자만 |
+
+### 3.6 태그 목록 정렬
+
+| 기준 | 설명 |
+|------|------|
+| 1순위 | `last_used_at` 내림차순 (일정에 태그 연결 시 갱신) |
+| 2순위 | `last_used_at` 없음 → `created_at` 내림차순 |
+
+`GET /tags` 응답 배열 순서가 FE 왼쪽 필터·설정·색 순서(`orderedTagIds`)에 그대로 쓰인다.
+
+### 3.7 이메일로 태그 찾기 (`GET /tags/discover?email=`)
+
+| 항목 | 설명 |
+|------|------|
+| 대상 | 해당 이메일 `users`의 `USER` 태그 중 `SHARED`·`PUBLIC`만 |
+| 비공개 | `PRIVATE`(ETC 포함)는 검색 결과에 없음 |
+| FE 「공개」 | 생성 시 `SHARED`로 저장되므로 검색에 포함됨 |
+| 소유자 닉네임 | **profile-svc** `GET /profiles?ids=` (FE·board와 동일, event-svc는 DB 직접 조회 안 함) |
+
+### 3.8 태그 숨김 (`user_hidden_tags`) — **구현됨**, 저장·복원
+
+| API | 설명 |
+|-----|------|
+| `PUT /tags/hidden` | 숨김 태그 ID 목록 전체 교체 |
+| `PUT /tags/{tagId}/hidden?hidden=true\|false` | 태그 하나 숨김/표시 |
+
+- 접근 가능한 태그만 숨길 수 있음.
+- **캘린더 왼쪽 필터에서만 안 보이게** 하는 것이지, DB에서 태그를 삭제하거나 visibility를 바꾸는 것이 아님.
+- `user_hidden_tags`에 저장되므로 **다시 로그인·새로고침해도 유지**된다 (`GET /tags`의 `hidden` 플래그).
+
+### 3.9 일정 중복 표시
+
+| 구간 | 동작 |
+|------|------|
+| `GET /events` | 일정 ID당 **한 번만** 반환 (태그 필터에 여러 태그가 매칭돼도 중복 없음) |
+| FE | 응답을 `id` 기준으로 한 번 더 dedupe |
+
+---
+
+## 4. 이벤트(`events`) 규칙
+
+### 4.1 생성 (`POST /events`)
+
+| 필드 | 기본값 |
+|------|--------|
+| `visibility` | 생략 시 `PRIVATE` |
+| `tags` | 비어 있으면 소유자 `ETC` 태그 ID 자동 연결 |
+
+### 4.1.1 삭제 (`DELETE /events/{eventId}`)
+
+| 항목 | 정책 |
+|------|------|
+| 권한 | **일정 소유자만** |
+| 태그 | 일정 row 삭제 시 `event_tags`는 FK CASCADE로 함께 제거 (별도 ETC 이동 없음) |
+
+### 4.1.2 태그 삭제 시 일정 처리
+
+| 상황 | 처리 |
+|------|------|
+| 삭제된 태그만 연결된 일정 | 해당 태그 연결 제거 후 **일정 `owner_id`의 `ETC`** 자동 연결 |
+| 다른 태그도 있는 일정 | 삭제 태그 연결만 제거 |
+| `ETC` 태그 | 삭제 불가 |
+
+### 4.2 조회 (`EventAccessService.canView`)
+
+| 조건 | 볼 수 있음 |
+|------|------------|
+| 이벤트 소유자 | O |
+| `event_participants`에 포함 | O |
+| 이벤트 `PUBLIC` | O (비로그인 포함) |
+| 이벤트 `SHARED` + 연결 태그에 접근 가능 | O |
+| 기본 노출 태그(`CALENDAR_DEFAULT_VISIBLE_TAG_IDS`)에 연결 + 이벤트 `PUBLIC`/`SHARED` | O |
+
+「나의 일정」과 「볼 수 있는 일정」 구분은 설계 문서 §11 참고.
+
+---
+
+## 5. 프론트엔드 캘린더 UI 규칙
+
+### 5.1 API `visibility` → UI 표시
+
+```text
+TagResponse.visibility === "PUBLIC" | "SHARED"  →  UI "public" (공개 토글 ON)
+그 외 (PRIVATE 등)                              →  UI "private"
+```
+
+`SHARED`도 화면에서는 **공개**로 묶어서 표시한다.
+
+### 5.2 설정 패널 — 토글·버튼 가능 여부
+
+| 태그 종류 | 공개/비공개 토글 | 삭제(휴지통) | 숨기기 |
+|-----------|------------------|--------------|--------|
+| `builtin` (UI 기본 태그) | 미표시 | 미표시 | 미표시 |
+| `CALENDAR_DEFAULT_VISIBLE_TAG_IDS` (공통 노출) | 미표시 | **미표시** (숨기기만) | 가능 |
+| `source: "followed"` (가져온 태그, 공통 제외) | 미표시 | 내 목록에서 제거(숨김) | 가능 |
+| 본인 소유 `USER` | 표시 | **삭제**(API) | 가능 |
+| 본인 소유 `ETC` | 미표시 | **미표시** | 가능 |
+| 타인 소유 (가져오지 않음) | 미표시 | **미표시** | 접근 가능 시만 |
+
+`canManageTag`: `!builtin && source !== "followed" && ownerId === currentUserId`
+
+### 5.3 설정 패널 — 사용자 메시지
+
+| 메시지 | 조건 |
+|--------|------|
+| 공개 여부는 태그 소유자만 바꿀 수 있습니다. | `!canManage(tag)` 인데 토글 시도 |
+| **태그 공개 여부를 변경할 수 없습니다.** | API 실패 또는 `ETC` 등 |
+| 태그 공개 여부를 변경했습니다. | 소유자 `USER` 태그 변경 성공 |
+| 왼쪽 태그 목록에서 숨겼습니다. / 다시 표시 | 숨김 API 성공/실패 |
+| 비공개 태그는 추가할 수 없습니다. | 태그 찾기에서 follow 실패 |
+
+### 5.4 태그 생성 (사이드바·설정)
+
+- `createCalendarTag(name, "private")` — 새 태그는 **비공개(`PRIVATE`)** 로만 생성.
+- UI에서 생성 시 **공개로 만들기**는 설정 패널 토글에 의존 → 현재는 §1과 동일 이유로 불가.
+
+---
+
+## 6. API 요약 (event-svc)
+
+| 메서드 | 경로 | visibility 관련 |
+|--------|------|-----------------|
+| GET | `/tags` | 목록 + `defaultVisibleTagIds` |
+| POST | `/tags` | 생성 시만 `{ name, visibility? }` |
+| PUT | `/tags/hidden` | 숨김만 (visibility 무관) |
+| PUT | `/tags/{tagId}/hidden` | 숨김만 |
+| PUT | `/tags/{tagId}/visibility` | 소유자 `USER` 태그 공개 범위 변경 |
+| GET | `/events` | 조회 시 접근 규칙 적용 |
+| POST | `/events` | `{ visibility?, tags?, ... }` |
+
+---
+
+## 7. 추후 권장
+
+1. `tag_members` API — `SHARED` 전환 시 실제 공유 대상 지정.
+2. 진짜 `PUBLIC` 태그 정책 — 생성·수정 시 `PUBLIC` vs `SHARED` 정규화 재검토.
+
+---
+
+## 8. 관련 파일
+
+| 영역 | 파일 |
+|------|------|
+| 도메인 설계 | `schedule_domain_design_document(1).md` §8–10 |
+| 서버 접근 | `event_svc/service/EventAccessService.java` |
+| 서버 태그 | `event_svc/service/TagService.java` |
+| FE 훅 | `frontend/.../hooks/useCalendarTags.ts` (`setTagVisibility`) |
+| FE 메시지 | `frontend/.../components/CalendarSettingsPanel.tsx` |
+| FE 권한 | `frontend/.../components/settings/calendarSettingsUtils.ts` (`canManageTag`) |
