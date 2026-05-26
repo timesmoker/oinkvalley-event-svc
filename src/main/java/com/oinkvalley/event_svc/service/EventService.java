@@ -84,12 +84,13 @@ public class EventService {
         List<Long> tagIds = eventTagLinkService.resolveEventTagIds(
                 userId, userId, request.tags());
         eventTagLinkService.replaceEventTags(event.getId(), tagIds);
+        List<Long> linkedTagIds = eventTagRepository.findTagIdsByEventId(event.getId());
 
         List<Long> participantIds = participantService.resolveParticipantIds(
                 request.participantEmails(), userId);
         participantService.replaceParticipants(event.getId(), participantIds);
 
-        return toResponse(event, tagIds, participantIds);
+        return toResponse(event, linkedTagIds, participantIds);
     }
 
     public EventResponse update(Long userId, long eventId, UpdateEventRequest request) {
@@ -119,12 +120,13 @@ public class EventService {
         List<Long> tagIds = eventTagLinkService.resolveEventTagIds(
                 userId, event.getOwnerId(), request.tags());
         eventTagLinkService.replaceEventTags(event.getId(), tagIds);
+        List<Long> linkedTagIds = eventTagRepository.findTagIdsByEventId(event.getId());
 
         List<Long> participantIds = participantService.resolveParticipantIds(
                 request.participantEmails(), event.getOwnerId());
         participantService.replaceParticipants(event.getId(), participantIds);
 
-        return toResponse(event, tagIds, participantIds);
+        return toResponse(event, linkedTagIds, participantIds);
     }
 
     public void delete(Long userId, long eventId) {
