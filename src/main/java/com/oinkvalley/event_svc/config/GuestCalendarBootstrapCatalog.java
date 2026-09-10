@@ -1,15 +1,14 @@
 package com.oinkvalley.event_svc.config;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oinkvalley.event_svc.dto.guest.GuestCalendarSampleSpec;
 import com.oinkvalley.event_svc.dto.guest.GuestCalendarSubscribeSpec;
 import com.oinkvalley.event_svc.service.CalendarTimeUtil;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -36,8 +35,8 @@ public class GuestCalendarBootstrapCatalog {
     }
 
     @PostConstruct
-    void load() throws IOException {
-        ObjectMapper mapper = new ObjectMapper();
+    void load() {
+        JsonMapper mapper = JsonMapper.shared();
         samples = parseList(mapper, samplesJson, new TypeReference<>() {});
         subscribeTags = parseList(mapper, subscribeTagsJson, new TypeReference<>() {});
     }
@@ -52,8 +51,7 @@ public class GuestCalendarBootstrapCatalog {
                 .toList();
     }
 
-    private static <T> List<T> parseList(ObjectMapper mapper, String json, TypeReference<List<T>> type)
-            throws IOException {
+    private static <T> List<T> parseList(JsonMapper mapper, String json, TypeReference<List<T>> type) {
         if (json == null || json.isBlank()) {
             return List.of();
         }
