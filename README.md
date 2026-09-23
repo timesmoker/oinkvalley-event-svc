@@ -40,7 +40,7 @@ Spring Boot **일정(이벤트)·태그 REST API**다. PostgreSQL에 `tags`, `ta
 | `SPRING_JPA_HIBERNATE_DDL_AUTO` | `spring.jpa.hibernate.ddl-auto` | 예: `validate` (기본값 `validate`) |
 | `JWT_SECRET` | `jwt.secret` | HS256 검증용 비밀키. **auth-svc 와 동일 값** |
 | `CALENDAR_DEFAULT_VISIBLE_TAG_IDS` | `calendar.default-visible-tag-ids` | 쉼표 구분, 캘린더 기본 노출 태그 ID |
-| `SERVICE_USER_PROFILE_BASE_URL` | `service.user-profile.base-url` | profile-svc 베이스 URL (기본 `http://profile-svc:8082`) |
+| `SERVICE_PROFILE_GRPC_TARGET` | `spring.grpc.client.channel.profile.target` | profile-svc gRPC (ClusterIP) |
 
 **JWT:** 이 서비스는 토큰을 **검증만** 한다. `sub` 는 사용자 ID(숫자 문자열), `roles` 는 `ROLE_` 접두사 없이 JWT에 담기고 필터에서 스프링 규약에 맞게 변환한다.
 
@@ -50,12 +50,12 @@ Spring Boot **일정(이벤트)·태그 REST API**다. PostgreSQL에 `tags`, `ta
 | --- | --- |
 | `controller/` | `EventController`, `TagController`, `HealthController`, `EventExceptionHandler` |
 | `service/` | 도메인 로직, `EventMapper`, `CalendarTimeUtil` |
-| `client/` | `UserProfileClient` → profile-svc |
+| `client/` | `UserProfileClient` → profile-svc gRPC |
 | `dto/event/`, `dto/tag/` | 요청·응답 레코드 |
 | `db/domain/` | JPA 엔티티 |
 | `db/repository/` | Spring Data JPA |
 | `security/` | JWT 검증 (`JwtUtil`, `JwtAuthenticationFilter`) |
-| `config/` | `SecurityConfig`, `RestClientConfig`, `CalendarProperties` |
+| `config/` | `SecurityConfig`, `CalendarProperties` |
 
 ## HTTP API
 
