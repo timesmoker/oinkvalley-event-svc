@@ -1,6 +1,6 @@
 package com.oinkvalley.event_svc.config;
 
-import com.oinkvalley.event_svc.security.JwtPrincipalConverter;
+import com.oinkvalley.event_svc.security.JwtAuthenticationFilter;
 import com.oinkvalley.event_svc.security.SecurityJsonHandlers;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -10,6 +10,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 
 /**
  * 스프링 시큐리티 필터 체인. board-svc 와 동일하게 JWT 무상태·JSON 401/403.
@@ -19,7 +20,7 @@ import org.springframework.security.web.SecurityFilterChain;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtPrincipalConverter jwtPrincipalConverter;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final SecurityJsonHandlers securityJsonHandlers;
 
     @Bean
@@ -38,13 +39,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/events").permitAll()
                         .anyRequest().authenticated()
                 )
-                .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtPrincipalConverter))
-                        .authenticationEntryPoint((request, response, authException) ->
-                                securityJsonHandlers.writeInvalidToken(response))
-                        .accessDeniedHandler((request, response, accessDeniedException) ->
-                                securityJsonHandlers.writeForbidden(response))
-                )
+                .addFilterBefore(jwtAuthenticationFilter, AuthorizationFilter.class)
                 .build();
     }
 }

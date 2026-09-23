@@ -1,16 +1,10 @@
-# syntax=docker/dockerfile:1
-
 # Build (JDK)
 FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /workspace
-ARG GITHUB_ACTOR
-ENV GITHUB_ACTOR=$GITHUB_ACTOR
 COPY gradlew settings.gradle build.gradle ./
 COPY gradle gradle
 COPY src src
-RUN --mount=type=secret,id=github_token \
-    export GITHUB_TOKEN="$(cat /run/secrets/github_token)" \
-    && chmod +x gradlew \
+RUN chmod +x gradlew \
     && ./gradlew bootJar --no-daemon -x test \
     && cp build/libs/event-svc-*-SNAPSHOT.jar /workspace/app.jar
 
