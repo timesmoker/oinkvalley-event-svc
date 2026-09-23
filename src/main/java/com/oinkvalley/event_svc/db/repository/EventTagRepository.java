@@ -3,6 +3,7 @@ package com.oinkvalley.event_svc.db.repository;
 import com.oinkvalley.event_svc.db.domain.EventTag;
 import com.oinkvalley.event_svc.db.domain.EventTagId;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -23,5 +24,7 @@ public interface EventTagRepository extends JpaRepository<EventTag, EventTagId> 
 
 	void deleteByEventIdAndTagId(Long eventId, Long tagId);
 
-	void deleteByEventId(Long eventId);
+	@Modifying(clearAutomatically = true, flushAutomatically = true)
+	@Query("DELETE FROM EventTag et WHERE et.eventId = :eventId")
+	void deleteAllByEventId(@Param("eventId") Long eventId);
 }

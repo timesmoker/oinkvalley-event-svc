@@ -12,7 +12,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 /** 일정–태그 연결 및 ETC 정규화(설계 시나리오 1–3). */
 @Service
@@ -81,14 +83,31 @@ public class EventTagLinkService {
         return out.stream().distinct().toList();
     }
 
+    /**
+     * 일정–태그 연결을 통째로 교체한다.
+     * derived {@code deleteByEventId}는 flush 시점에 INSERT보다 늦게 실행될 수 있어
+     * 방금 넣은 행이 지워지고 {@code tags.last_used_at}만 남는 현상이 있었다.
+     */
     public void replaceEventTags(long eventId, List<Long> tagIds) {
-        eventTagRepository.deleteByEventId(eventId);
-        for (Long tagId : tagIds) {
+        List<Long> expected = tagIds == null
+                ? List.of()
+                : tagIds.stream().filter(id -> id != null).distinct().toList();
+
+        eventTagRepository.deleteAllByEventId(eventId);
+        for (Long tagId : expected) {
             eventTagRepository.save(EventTag.builder()
                     .eventId(eventId)
                     .tagId(tagId)
                     .build());
         }
-        tagService.markTagsUsed(tagIds);
+        eventTagRepository.flush();
+
+        List<Long> persisted = eventTagRepository.findTagIdsByEventId(eventId);
+        if (!new HashSet<>(persisted).equals(new HashSet<>(expected))) {
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to persist event_tags for event " + eventId);
+        }
+        tagService.markTagsUsed(expected);
     }
 }

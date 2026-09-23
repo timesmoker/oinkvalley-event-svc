@@ -18,4 +18,6 @@ public interface EventRepository extends JpaRepository<Event, Long> {
 			@Param("rangeStart") Instant rangeStart,
 			@Param("rangeEnd") Instant rangeEnd
 	);
+
+	boolean existsByOwnerId(Long ownerId);
 }
