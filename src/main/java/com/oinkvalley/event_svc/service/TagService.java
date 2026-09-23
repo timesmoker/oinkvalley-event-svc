@@ -297,40 +297,6 @@ public class TagService {
                         .build()));
     }
 
-    /**
-     * 게스트 부트스트랩: 지정 소유자의 태그 구독({@code tag_members}·숨김 해제).
-     * 태그 없음·소유자 불일치·PRIVATE 는 무시.
-     */
-    public void followOwnerTagIfAllowed(Long userId, long ownerUserId, long tagId) {
-        Tag tag = tagRepository.findById(tagId).orElse(null);
-        if (tag == null || tag.getOwnerId() != ownerUserId) {
-            return;
-        }
-        try {
-            followTag(userId, tagId);
-        } catch (ResponseStatusException ignored) {
-            // 비공개·미존재 등 — 부트스트랩은 조용히 스킵
-        }
-    }
-
-    /**
-     * 게스트 부트스트랩: 이름 기준 본인 소유 USER/PRIVATE 태그 보장.
-     * 없으면 PRIVATE USER 태그 생성.
-     */
-    public Tag ensureOwnedUserTagByName(Long userId, String rawName) {
-        if (userId == null || rawName == null || rawName.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tag name is required");
-        }
-        String name = rawName.trim();
-        return tagRepository.findByOwnerIdAndName(userId, name)
-                .orElseGet(() -> tagRepository.save(Tag.builder()
-                        .ownerId(userId)
-                        .name(name)
-                        .type(TagType.USER)
-                        .visibility(Visibility.PRIVATE)
-                        .build()));
-    }
-
     private TagResponse toResponse(Tag tag, boolean hidden) {
         return new TagResponse(
                 tag.getId(),

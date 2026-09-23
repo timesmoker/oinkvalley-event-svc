@@ -1,22 +1,22 @@
 package com.oinkvalley.event_svc.client;
 
-import com.oinkvalley.profile.v1.BatchGetProfileNicknamesRequest;
-import com.oinkvalley.profile.v1.ProfileInternalServiceGrpc;
-import com.oinkvalley.profile.v1.ProfileNickname;
-import io.grpc.StatusRuntimeException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
-/** profile-svc 내부 gRPC — `user_profiles` 는 profile-svc 만 조회한다. */
+/** profile-svc `GET /profiles?ids=` — `user_profiles` 는 profile-svc 만 조회한다. */
 @Component
 @RequiredArgsConstructor
 public class UserProfileClient {
 
-    private final ProfileInternalServiceGrpc.ProfileInternalServiceBlockingStub profileStub;
+    private final RestClient userProfileRestClient;
 
     public String nicknameForUser(long userId) {
         return nicknamesByUserIds(List.of(userId)).get(userId);
@@ -26,25 +26,37 @@ public class UserProfileClient {
         if (userIds == null || userIds.isEmpty()) {
             return Map.of();
         }
-        List<Long> ids = userIds.stream()
+        String idsParam = userIds.stream()
                 .filter(id -> id != null && id > 0)
                 .distinct()
-                .toList();
-        if (ids.isEmpty()) {
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
+        if (idsParam.isBlank()) {
             return Map.of();
         }
         try {
-            var response = profileStub.batchGetProfileNicknames(
-                    BatchGetProfileNicknamesRequest.newBuilder().addAllUserIds(ids).build());
+            List<ProfileNicknameDto> body = userProfileRestClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/profiles")
+                            .queryParam("ids", idsParam)
+                            .build())
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {});
+            if (body == null || body.isEmpty()) {
+                return Map.of();
+            }
             Map<Long, String> out = new HashMap<>();
-            for (ProfileNickname profile : response.getProfilesList()) {
-                if (profile.getUserId() > 0 && !profile.getNickname().isBlank()) {
-                    out.put(profile.getUserId(), profile.getNickname().trim());
+            for (ProfileNicknameDto dto : body) {
+                if (dto.userId() != null && dto.nickname() != null && !dto.nickname().isBlank()) {
+                    out.put(dto.userId(), dto.nickname().trim());
                 }
             }
             return out;
-        } catch (StatusRuntimeException e) {
+        } catch (RestClientException e) {
             return Map.of();
         }
+    }
+
+    public record ProfileNicknameDto(Long userId, String nickname) {
     }
 }
